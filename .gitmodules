@@ -1,0 +1,9 @@
+[submodule "dpf"]
+	path = dpf
+	url = https://github.com/DISTRHO/DPF.git
+[submodule "3rd-party/r8brain"]
+	path = 3rd-party/r8brain
+	url = https://github.com/avaneev/r8brain-free-src.git
+[submodule "3rd-party/FFTConvolver"]
+	path = 3rd-party/FFTConvolver
+	url = https://github.com/falkTX/FFTConvolver.git
