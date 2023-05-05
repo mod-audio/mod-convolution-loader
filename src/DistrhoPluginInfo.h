@@ -17,7 +17,7 @@
 #pragma once
 
 #define DISTRHO_PLUGIN_BRAND "MOD"
-#define DISTRHO_PLUGIN_NAME  "OneKnob Convolution Loader"
+#define DISTRHO_PLUGIN_NAME  "MOD Convolution Loader"
 
 #define DISTRHO_PLUGIN_URI          "https://mod.audio/plugins/ConvolutionLoader"
 #define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:ReverbPlugin"
@@ -36,6 +36,7 @@ enum Parameters {
     kParameterHighPassFilter,
     kParameterTrails,
     kParameterBypass,
+    kParameterBuffered,
     kParameterCount
 };
 
@@ -55,5 +56,6 @@ static constexpr const struct OneKnobParameterRanges {
     { -60.f, -30.f, 0.f },
     { 0.f, 0.f, 500.f },
     { 0.f, 1.f, 1.f },
+    { 0.f, 0.f, 1.f },
     { 0.f, 0.f, 1.f }
 };

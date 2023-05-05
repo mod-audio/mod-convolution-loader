@@ -103,8 +103,7 @@ protected:
 
     const char* getDescription() const override
     {
-        // TODO
-        return "";
+        return "The MOD Convolution Loader enables you to easily create custom reverb and other effects using impulse responses (IRs)";
     }
 
     const char* getLicense() const noexcept override
@@ -183,6 +182,14 @@ protected:
         case kParameterBypass:
             parameter.initDesignation(kParameterDesignationBypass);
             break;
+        case kParameterBuffered:
+            parameter.hints = kParameterIsAutomatable | kParameterIsInteger | kParameterIsBoolean;
+            parameter.name = "Buffered";
+            parameter.symbol = "buffered";
+            parameter.ranges.def = kParameterRanges[kParameterTrails].def;
+            parameter.ranges.min = kParameterRanges[kParameterTrails].min;
+            parameter.ranges.max = kParameterRanges[kParameterTrails].max;
+            break;
         }
     }
 
@@ -247,6 +254,8 @@ protected:
                 smoothWetLevel.setTargetValue(std::pow(10.f, 0.05f * parameters[kParameterWetLevel]));
             }
             break;
+        case kParameterBuffered:
+            break;
         }
     }
 
@@ -263,6 +272,7 @@ protected:
 
             if (valuelen <= 5)
             {
+                bufferedConvolver.stop();
                 const MutexLocker cml(mutex);
                 convolverL.swapWith(newConvolverL);
                 convolverR.swapWith(newConvolverR);
@@ -344,6 +354,9 @@ protected:
             newConvolverR = new TwoStageThreadedConvolver();
             newConvolverR->init(headBlockSize, tailBlockSize, irBufR, numFrames);
 
+            bufferedConvolver.stop();
+            bufferedConvolver.start(newConvolverL, newConvolverR);
+
             {
                 const MutexLocker cml(mutex);
                 convolverL.swapWith(newConvolverL);
@@ -392,29 +405,26 @@ protected:
 
     void run(const float** const inputs, float** const outputs, const uint32_t frames) override
     {
+        if (frames == 0)
+            return;
+
+        const float* const inL = inputs[0];
+        const float* const inR = inputs[1];
+        /* */ float* const outL = outputs[0];
+        /* */ float* const outR = outputs[1];
+
         // optimize for non-denormal usage
         for (uint32_t i = 0; i < frames; ++i)
         {
-            if (!std::isfinite(inputs[0][i]))
+            if (!std::isfinite(inL[i]))
                 __builtin_unreachable();
-            if (!std::isfinite(inputs[1][i]))
+            if (!std::isfinite(inR[i]))
                 __builtin_unreachable();
-            if (!std::isfinite(outputs[0][i]))
+            if (!std::isfinite(outL[i]))
                 __builtin_unreachable();
-            if (!std::isfinite(outputs[1][i]))
+            if (!std::isfinite(outR[i]))
                 __builtin_unreachable();
         }
-
-        for (uint32_t offset = 0; offset < frames; offset += bufferSize)
-            run(inputs, outputs, std::min(frames - offset, bufferSize), offset);
-    }
-
-    void run(const float** const inputs, float** const outputs, const uint32_t frames, const uint32_t offset)
-    {
-        const float* const inL = inputs[0] + offset;
-        const float* const inR = inputs[1] + offset;
-        /* */ float* const outL = outputs[0] + offset;
-        /* */ float* const outR = outputs[1] + offset;
 
         const float* dryBufL = inL;
         const float* dryBufR = inR;
@@ -460,8 +470,17 @@ protected:
 
             if (convL != nullptr && convR != nullptr)
             {
-                convL->process(highpassBufL, outL, frames);
-                convR->process(highpassBufR, outR, frames);
+                if (1)
+                {
+                    const float* const ins[2] = { highpassBufL, highpassBufR };
+                    float* const outs[2] = { outL, outR };
+                    bufferedConvolver.process(ins, outs, frames);
+                }
+                else
+                {
+                    convL->process(highpassBufL, outL, frames);
+                    convR->process(highpassBufR, outR, frames);
+                }
 
                 for (uint32_t i = 0; i < frames; ++i)
                 {
@@ -519,6 +538,7 @@ protected:
 
 private:
     ScopedPointer<TwoStageThreadedConvolver> convolverL, convolverR;
+    StereoBufferedConvolver bufferedConvolver;
     Korg35Filter korgFilterL, korgFilterR;
     Mutex mutex;
     String loadedFilename;
