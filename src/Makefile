@@ -40,6 +40,6 @@ LINK_FLAGS      += $(SHARED_MEMORY_LIBS)
 # --------------------------------------------------------------
 # Enable all relevant plugin types
 
-all: lv2_sep jack
+all: lv2_sep
 
 # --------------------------------------------------------------
