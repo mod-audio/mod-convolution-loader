@@ -55,26 +55,28 @@ public:
         for (uint i=0; i<kParameterCount; ++i)
             parameters[i] = kParameterRanges[i].def;
 
-        const float sampleRate = static_cast<float>(getSampleRate());
-
-        korgFilterL.setSampleRate(sampleRate);
-        korgFilterR.setSampleRate(sampleRate);
-
         korgFilterL.setFrequency(kParameterRanges[kParameterHighPassFilter].def);
         korgFilterR.setFrequency(kParameterRanges[kParameterHighPassFilter].def);
-
-        smoothDryLevel.setSampleRate(sampleRate);
-        smoothWetLevel.setSampleRate(sampleRate);
 
         smoothDryLevel.setTimeConstant(0.1f);
         smoothWetLevel.setTimeConstant(0.1f);
 
         smoothDryLevel.setTargetValue(std::pow(10.f, 0.05f * kParameterRanges[kParameterDryLevel].def));
         smoothWetLevel.setTargetValue(std::pow(10.f, 0.05f * kParameterRanges[kParameterWetLevel].def));
+
+        // init buffers
+        bufferSizeChanged(getBufferSize());
+        sampleRateChanged(getSampleRate());
+
+        setState("irfile", "/home/falktx/Projects/Music/Samplicity M7 Main - 04 - Wave Quad files, 32 bit, 48 Khz, v1.1/1 Halls 01 Large Hall Quad.wav");
     }
 
     ~OneKnobConvolutionReverbPlugin() override
     {
+        delete[] highpassBufL;
+        delete[] highpassBufR;
+        delete[] inplaceProcBufL;
+        delete[] inplaceProcBufR;
     }
 
 protected:
@@ -378,29 +380,11 @@ protected:
 
     void activate() override
     {
-        const uint32_t bufSize = bufferSize = getBufferSize();
-
-        highpassBufL = new float[bufSize];
-        highpassBufR = new float[bufSize];
-        inplaceProcBufL = new float[bufSize];
-        inplaceProcBufR = new float[bufSize];
-
         korgFilterL.reset();
         korgFilterR.reset();
 
         smoothDryLevel.clearToTargetValue();
         smoothWetLevel.clearToTargetValue();
-    }
-
-    void deactivate() override
-    {
-        delete[] highpassBufL;
-        delete[] highpassBufR;
-        delete[] inplaceProcBufL;
-        delete[] inplaceProcBufR;
-        bufferSize = 0;
-        highpassBufL = highpassBufR = nullptr;
-        inplaceProcBufL = inplaceProcBufR = nullptr;
     }
 
     void run(const float** const inputs, float** const outputs, const uint32_t frames) override
@@ -473,8 +457,7 @@ protected:
                 if (1)
                 {
                     const float* const ins[2] = { highpassBufL, highpassBufR };
-                    float* const outs[2] = { outL, outR };
-                    bufferedConvolver.process(ins, outs, frames);
+                    bufferedConvolver.process(ins, outputs, frames);
                 }
                 else
                 {
@@ -518,6 +501,23 @@ protected:
         }
     }
 
+    void bufferSizeChanged(const uint32_t newBufferSize) override
+    {
+        bufferSize = newBufferSize;
+
+        delete[] highpassBufL;
+        delete[] highpassBufR;
+        delete[] inplaceProcBufL;
+        delete[] inplaceProcBufR;
+
+        highpassBufL = new float[newBufferSize];
+        highpassBufR = new float[newBufferSize];
+        inplaceProcBufL = new float[newBufferSize];
+        inplaceProcBufR = new float[newBufferSize];
+
+        bufferedConvolver.setBufferSize(newBufferSize);
+    }
+
     void sampleRateChanged(const double newSampleRate) override
     {
         korgFilterL.setSampleRate(newSampleRate);
@@ -534,7 +534,7 @@ protected:
         }
     }
 
-  // -------------------------------------------------------------------
+    // -------------------------------------------------------------------
 
 private:
     ScopedPointer<TwoStageThreadedConvolver> convolverL, convolverR;

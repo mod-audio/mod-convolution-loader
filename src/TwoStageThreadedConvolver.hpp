@@ -108,29 +108,22 @@ class StereoBufferedConvolver : private Thread
     float* bufferedInputR;
     float* bufferedOutputL;
     float* bufferedOutputR;
-    volatile uint32_t bufferedLen;
+    uint32_t bufferSize;
 
     Semaphore semBgProcStart;
     Semaphore semBgProcFinished;
 
-    Mutex mutex;
+    Mutex mutexI, mutexO;
 
 public:
     StereoBufferedConvolver()
         : Thread("StereoBufferedConvolver"),
           convL(nullptr),
           convR(nullptr),
-          semBgProcStart(0)
-          ,semBgProcFinished(0)
+          semBgProcStart(0),
+          semBgProcFinished(0)
     {
-        bufferedInputL = new float[8192];
-        bufferedInputR = new float[8192];
-        bufferedOutputL = new float[8192];
-        bufferedOutputR = new float[8192];
-        std::memset(bufferedOutputL, 0, sizeof(float)*8192);
-        std::memset(bufferedOutputR, 0, sizeof(float)*8192);
-
-        bufferedLen = 0;
+        bufferSize = 0;
     }
 
     ~StereoBufferedConvolver() override
@@ -141,6 +134,36 @@ public:
         delete[] bufferedInputR;
         delete[] bufferedOutputL;
         delete[] bufferedOutputR;
+    }
+
+    void setBufferSize(const uint32_t newBufferSize)
+    {
+        if (bufferSize == newBufferSize)
+            return;
+
+        const bool wasRunning = isThreadRunning();
+        TwoStageThreadedConvolver* const cl = convL;
+        TwoStageThreadedConvolver* const cr = convR;
+
+        if (wasRunning)
+            stop();
+
+        bufferSize = newBufferSize;
+
+        delete[] bufferedInputL;
+        delete[] bufferedInputR;
+        delete[] bufferedOutputL;
+        delete[] bufferedOutputR;
+
+        bufferedInputL = new float[newBufferSize];
+        bufferedInputR = new float[newBufferSize];
+        bufferedOutputL = new float[newBufferSize];
+        bufferedOutputR = new float[newBufferSize];
+        std::memset(bufferedOutputL, 0, sizeof(float)*newBufferSize);
+        std::memset(bufferedOutputR, 0, sizeof(float)*newBufferSize);
+
+        if (wasRunning)
+            start(cl, cr);
     }
 
     void start(TwoStageThreadedConvolver* const cl, TwoStageThreadedConvolver* const cr)
@@ -176,61 +199,45 @@ public:
             return;
         }
 
-        // place input
-        {
-        }
+        DISTRHO_SAFE_ASSERT_UINT2_RETURN(bufferSize == len, bufferSize, len,);
 
-        // copy old processed audio to ouput
-        {
-            const MutexLocker cmtl(mutex);
-            std::memcpy(bufferedInputL, inputs[0], sizeof(float)*len);
-            std::memcpy(bufferedInputR, inputs[1], sizeof(float)*len);
-            bufferedLen = len;
-        }
-
-        semBgProcStart.post();
+        // fetch audio from previous processing
         semBgProcFinished.wait();
-
         {
-            const MutexLocker cmtl(mutex);
+//             const MutexLocker cmtl(mutexO);
             std::memcpy(outputs[0], bufferedOutputL, sizeof(float)*len);
             std::memcpy(outputs[1], bufferedOutputR, sizeof(float)*len);
         }
 
-        // while (bufferedLen != 0)
-        // {
-        //     #ifdef __x86_64
-        //     #else
-        //     __asm__("isb");
-        //     #endif
-        // }
+        // place input for next processing
+        {
+//             const MutexLocker cmtl(mutexI);
+            std::memcpy(bufferedInputL, inputs[0], sizeof(float)*len);
+            std::memcpy(bufferedInputR, inputs[1], sizeof(float)*len);
+        }
+        semBgProcStart.post();
     }
 
     void run() override
     {
+        DISTRHO_SAFE_ASSERT_RETURN(bufferSize != 0,);
+
         TwoStageThreadedConvolver* cl;
         TwoStageThreadedConvolver* cr;
 
-        // float* tmpOutputL = new float[8192];
-        // float* tmpOutputR = new float[8192];
+        float* tmpOutputL = new float[bufferSize];
+        float* tmpOutputR = new float[bufferSize];
 
-        // std::memset(tmpOutputL, 0, sizeof(float)*8192);
-        // std::memset(tmpOutputR, 0, sizeof(float)*8192);
+        std::memset(tmpOutputL, 0, sizeof(float)*bufferSize);
+        std::memset(tmpOutputR, 0, sizeof(float)*bufferSize);
 
         while (!shouldThreadExit())
         {
-            // semBgProcFinished.post();
+            semBgProcFinished.post();
             semBgProcStart.wait();
 
-            DISTRHO_SAFE_ASSERT_BREAK(!shouldThreadExit());
-
-            {
-                DISTRHO_SAFE_ASSERT_CONTINUE(bufferedLen != 0);
-                /*
-                std::memcpy(bufferedOutputL, tmpOutputL, sizeof(float)*bufferedLen);
-                std::memcpy(bufferedOutputR, tmpOutputR, sizeof(float)*bufferedLen);
-                */
-            }
+            if (shouldThreadExit())
+                break;
 
             cl = convL;
             cr = convR;
@@ -238,21 +245,23 @@ public:
             DISTRHO_SAFE_ASSERT_CONTINUE(cr != nullptr);
 
             {
-            const MutexLocker cmtl(mutex);
-
-            // std::memcpy(bufferedOutputL, bufferedInputL, sizeof(float)*bufferedLen);
-            // std::memcpy(bufferedOutputR, bufferedInputR, sizeof(float)*bufferedLen);
-
-            cl->process(bufferedInputL, bufferedOutputL, sizeof(float)*bufferedLen);
-            cr->process(bufferedInputR, bufferedOutputR, sizeof(float)*bufferedLen);
+//                 const MutexLocker cmtl(mutexI);
+                std::memcpy(tmpOutputL, bufferedInputL, sizeof(float)*bufferSize);
+                std::memcpy(tmpOutputR, bufferedInputR, sizeof(float)*bufferSize);
             }
 
-            bufferedLen = 0;
-            semBgProcFinished.post();
+            cl->process(tmpOutputL, tmpOutputL, bufferSize);
+            cr->process(tmpOutputR, tmpOutputR, bufferSize);
+
+            {
+//                 const MutexLocker cmtl(mutexO);
+                std::memcpy(bufferedOutputL, tmpOutputL, sizeof(float)*bufferSize);
+                std::memcpy(bufferedOutputR, tmpOutputR, sizeof(float)*bufferSize);
+            }
         }
 
-        // delete[] tmpOutputL;
-        // delete[] tmpOutputR;
+        delete[] tmpOutputL;
+        delete[] tmpOutputR;
     }
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StereoBufferedConvolver)

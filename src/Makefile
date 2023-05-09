@@ -37,8 +37,6 @@ LINK_FLAGS      += $(SHARED_MEMORY_LIBS)
 # BUILD_CXX_FLAGS += -DAUDIOFFT_FFTW3 $(shell $(PKG_CONFIG) --cflags fftw3f)
 # LINK_FLAGS      += $(shell $(PKG_CONFIG) --libs fftw3f)
 
-# BUILD_CXX_FLAGS += -DAUDIOFFT_PFFFT -DPFFFT_ENABLE_NEON -Ipffft
-
 # --------------------------------------------------------------
 # Enable all relevant plugin types
 
