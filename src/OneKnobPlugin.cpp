@@ -186,9 +186,9 @@ protected:
             parameter.hints = kParameterIsAutomatable | kParameterIsInteger | kParameterIsBoolean;
             parameter.name = "Buffered";
             parameter.symbol = "buffered";
-            parameter.ranges.def = kParameterRanges[kParameterTrails].def;
-            parameter.ranges.min = kParameterRanges[kParameterTrails].min;
-            parameter.ranges.max = kParameterRanges[kParameterTrails].max;
+            parameter.ranges.def = kParameterRanges[kParameterBuffered].def;
+            parameter.ranges.min = kParameterRanges[kParameterBuffered].min;
+            parameter.ranges.max = kParameterRanges[kParameterBuffered].max;
             break;
         }
     }
