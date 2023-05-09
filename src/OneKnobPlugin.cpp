@@ -257,6 +257,7 @@ protected:
             }
             break;
         case kParameterBuffered:
+            buffered = value > 0.5f;
             break;
         }
     }
@@ -544,6 +545,7 @@ private:
     String loadedFilename;
 
     bool bypassed = false;
+    bool buffered = false;
     bool trails = true;
     uint32_t bufferSize = 0;
 

@@ -27,7 +27,7 @@ public:
     TwoStageThreadedConvolver()
         : fftconvolver::TwoStageFFTConvolver(),
           Thread("TwoStageThreadedConvolver"),
-          semBgProcStart(0),
+          semBgProcStart(1),
           semBgProcFinished(0)
     {
     }
@@ -47,7 +47,7 @@ public:
 
     bool init(const size_t headBlockSize, const size_t tailBlockSize, const fftconvolver::Sample* const ir, const size_t irLen)
     {
-        if (irLen > headBlockSize * 2 && 0)
+        if (irLen > headBlockSize * 2)
         {
             if (! fftconvolver::TwoStageFFTConvolver::init(headBlockSize, tailBlockSize, ir, irLen))
                 return false;
@@ -101,29 +101,25 @@ protected:
 
 class StereoBufferedConvolver : private Thread
 {
-    TwoStageThreadedConvolver* convL;
-    TwoStageThreadedConvolver* convR;
-
-    float* bufferedInputL;
-    float* bufferedInputR;
-    float* bufferedOutputL;
-    float* bufferedOutputR;
-    uint32_t bufferSize;
+    TwoStageThreadedConvolver* convL = nullptr;
+    TwoStageThreadedConvolver* convR = nullptr;
+    float* bufferedInputL = nullptr;
+    float* bufferedInputR = nullptr;
+    float* bufferedOutputL = nullptr;
+    float* bufferedOutputR = nullptr;
+    uint32_t bufferSize = 0;
 
     Semaphore semBgProcStart;
     Semaphore semBgProcFinished;
 
-    Mutex mutexI, mutexO;
+    // Mutex mutexI, mutexO;
 
 public:
     StereoBufferedConvolver()
         : Thread("StereoBufferedConvolver"),
-          convL(nullptr),
-          convR(nullptr),
           semBgProcStart(0),
           semBgProcFinished(0)
     {
-        bufferSize = 0;
     }
 
     ~StereoBufferedConvolver() override
@@ -204,14 +200,14 @@ public:
         // fetch audio from previous processing
         semBgProcFinished.wait();
         {
-//             const MutexLocker cmtl(mutexO);
+            // const MutexLocker cmtl(mutexO);
             std::memcpy(outputs[0], bufferedOutputL, sizeof(float)*len);
             std::memcpy(outputs[1], bufferedOutputR, sizeof(float)*len);
         }
 
         // place input for next processing
         {
-//             const MutexLocker cmtl(mutexI);
+            // const MutexLocker cmtl(mutexI);
             std::memcpy(bufferedInputL, inputs[0], sizeof(float)*len);
             std::memcpy(bufferedInputR, inputs[1], sizeof(float)*len);
         }
@@ -225,6 +221,8 @@ public:
         TwoStageThreadedConvolver* cl;
         TwoStageThreadedConvolver* cr;
 
+        float* tmpInputL = new float[bufferSize];
+        float* tmpInputR = new float[bufferSize];
         float* tmpOutputL = new float[bufferSize];
         float* tmpOutputR = new float[bufferSize];
 
@@ -245,21 +243,23 @@ public:
             DISTRHO_SAFE_ASSERT_CONTINUE(cr != nullptr);
 
             {
-//                 const MutexLocker cmtl(mutexI);
-                std::memcpy(tmpOutputL, bufferedInputL, sizeof(float)*bufferSize);
-                std::memcpy(tmpOutputR, bufferedInputR, sizeof(float)*bufferSize);
+                // const MutexLocker cmtl(mutexI);
+                std::memcpy(tmpInputL, bufferedInputL, sizeof(float)*bufferSize);
+                std::memcpy(tmpInputR, bufferedInputR, sizeof(float)*bufferSize);
             }
 
-            cl->process(tmpOutputL, tmpOutputL, bufferSize);
-            cr->process(tmpOutputR, tmpOutputR, bufferSize);
+            cl->process(tmpInputL, tmpOutputL, bufferSize);
+            cr->process(tmpInputR, tmpOutputR, bufferSize);
 
             {
-//                 const MutexLocker cmtl(mutexO);
+                // const MutexLocker cmtl(mutexO);
                 std::memcpy(bufferedOutputL, tmpOutputL, sizeof(float)*bufferSize);
                 std::memcpy(bufferedOutputR, tmpOutputR, sizeof(float)*bufferSize);
             }
         }
 
+        delete[] tmpInputL;
+        delete[] tmpInputR;
         delete[] tmpOutputL;
         delete[] tmpOutputR;
     }
