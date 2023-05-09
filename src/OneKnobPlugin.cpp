@@ -67,8 +67,6 @@ public:
         // init buffers
         bufferSizeChanged(getBufferSize());
         sampleRateChanged(getSampleRate());
-
-        setState("irfile", "/home/falktx/Projects/Music/Samplicity M7 Main - 04 - Wave Quad files, 32 bit, 48 Khz, v1.1/1 Halls 01 Large Hall Quad.wav");
     }
 
     ~OneKnobConvolutionReverbPlugin() override
@@ -455,7 +453,7 @@ protected:
 
             if (convL != nullptr && convR != nullptr)
             {
-                if (1)
+                if (buffered)
                 {
                     const float* const ins[2] = { highpassBufL, highpassBufR };
                     bufferedConvolver.process(ins, outputs, frames);
