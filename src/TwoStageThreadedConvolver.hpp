@@ -99,6 +99,147 @@ protected:
 
 // --------------------------------------------------------------------------------------------------------------------
 
+class MonoBufferedConvolver : private Thread
+{
+    TwoStageThreadedConvolver* conv = nullptr;
+    float* bufferedInput = nullptr;
+    float* bufferedOutput = nullptr;
+    uint32_t bufferSize = 0;
+
+    Semaphore semBgProcStart;
+    Semaphore semBgProcFinished;
+
+    // Mutex mutexI, mutexO;
+
+public:
+    MonoBufferedConvolver()
+        : Thread("MonoBufferedConvolver"),
+          semBgProcStart(0),
+          semBgProcFinished(0)
+    {
+    }
+
+    ~MonoBufferedConvolver() override
+    {
+        stop();
+
+        delete[] bufferedInput;
+        delete[] bufferedOutput;
+    }
+
+    void setBufferSize(const uint32_t newBufferSize)
+    {
+        if (bufferSize == newBufferSize)
+            return;
+
+        const bool wasRunning = isThreadRunning();
+        TwoStageThreadedConvolver* const c = conv;
+
+        if (wasRunning)
+            stop();
+
+        bufferSize = newBufferSize;
+
+        delete[] bufferedInput;
+        delete[] bufferedOutput;
+
+        bufferedInput = new float[newBufferSize];
+        bufferedOutput = new float[newBufferSize];
+        std::memset(bufferedOutput, 0, sizeof(float)*newBufferSize);
+
+        if (wasRunning)
+            start(c);
+    }
+
+    void start(TwoStageThreadedConvolver* const c)
+    {
+        DISTRHO_SAFE_ASSERT_RETURN(c != nullptr,);
+
+        conv = c;
+        startThread(true);
+    }
+
+    void stop()
+    {
+        if (conv == nullptr)
+            return;
+
+        conv = nullptr;
+        signalThreadShouldExit();
+        semBgProcStart.post();
+        stopThread(5000);
+    }
+
+    void process(const float* const input, float* const output, const uint32_t len)
+    {
+        if (conv == nullptr)
+        {
+            if (output != input)
+                std::memcpy(output, input, sizeof(float)*len);
+            return;
+        }
+
+        DISTRHO_SAFE_ASSERT_UINT2_RETURN(bufferSize == len, bufferSize, len,);
+
+        // fetch audio from previous processing
+        semBgProcFinished.wait();
+        {
+            // const MutexLocker cmtl(mutexO);
+            std::memcpy(output, bufferedOutput, sizeof(float)*len);
+        }
+
+        // place input for next processing
+        {
+            // const MutexLocker cmtl(mutexI);
+            std::memcpy(bufferedInput, input, sizeof(float)*len);
+        }
+        semBgProcStart.post();
+    }
+
+    void run() override
+    {
+        DISTRHO_SAFE_ASSERT_RETURN(bufferSize != 0,);
+
+        TwoStageThreadedConvolver* c;
+
+        float* tmpInput = new float[bufferSize];
+        float* tmpOutput = new float[bufferSize];
+
+        std::memset(tmpOutput, 0, sizeof(float)*bufferSize);
+
+        while (!shouldThreadExit())
+        {
+            semBgProcFinished.post();
+            semBgProcStart.wait();
+
+            if (shouldThreadExit())
+                break;
+
+            c = conv;
+            DISTRHO_SAFE_ASSERT_CONTINUE(c != nullptr);
+
+            {
+                // const MutexLocker cmtl(mutexI);
+                std::memcpy(tmpInput, bufferedInput, sizeof(float)*bufferSize);
+            }
+
+            c->process(tmpInput, tmpOutput, bufferSize);
+
+            {
+                // const MutexLocker cmtl(mutexO);
+                std::memcpy(bufferedOutput, tmpOutput, sizeof(float)*bufferSize);
+            }
+        }
+
+        delete[] tmpInput;
+        delete[] tmpOutput;
+    }
+
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MonoBufferedConvolver)
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+
 class StereoBufferedConvolver : private Thread
 {
     TwoStageThreadedConvolver* convL = nullptr;

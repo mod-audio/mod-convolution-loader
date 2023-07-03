@@ -28,7 +28,7 @@ endif
 clean:
 	$(MAKE) clean -C dpf/utils/lv2-ttl-generator
 	$(MAKE) clean -C src
-	rm -f 3rd-party/FFTConvolver/*.d 3rd-party/FFTConvolver/*.o
+	rm -rf bin build
 
 # --------------------------------------------------------------
 

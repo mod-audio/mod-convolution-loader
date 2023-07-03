@@ -7,7 +7,7 @@
 # --------------------------------------------------------------
 # Project name, used for binaries
 
-NAME = MOD-ConvolutionLoader
+NAME = MOD-ConvolutionLoaderMono
 
 # --------------------------------------------------------------
 # Files to build

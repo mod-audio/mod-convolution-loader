@@ -46,22 +46,28 @@ static constexpr const size_t tailBlockSize = 1024;
 
 // -----------------------------------------------------------------------
 
-class OneKnobConvolutionReverbPlugin : public Plugin
+class ConvolutionLoaderPlugin : public Plugin
 {
 public:
-    OneKnobConvolutionReverbPlugin()
+    ConvolutionLoaderPlugin()
         : Plugin(kParameterCount, kProgramCount, kStateCount)
     {
         for (uint i=0; i<kParameterCount; ++i)
             parameters[i] = kParameterRanges[i].def;
 
+       #ifdef CONVOLUTION_REVERB
         korgFilterL.setFrequency(kParameterRanges[kParameterHighPassFilter].def);
         korgFilterR.setFrequency(kParameterRanges[kParameterHighPassFilter].def);
+       #endif
 
         smoothDryLevel.setTimeConstant(0.1f);
-        smoothWetLevel.setTimeConstant(0.1f);
-
+       #ifdef CONVOLUTION_REVERB
         smoothDryLevel.setTargetValue(std::pow(10.f, 0.05f * kParameterRanges[kParameterDryLevel].def));
+       #else
+        smoothDryLevel.setTargetValue(0.f);
+       #endif
+
+        smoothWetLevel.setTimeConstant(0.1f);
         smoothWetLevel.setTargetValue(std::pow(10.f, 0.05f * kParameterRanges[kParameterWetLevel].def));
 
         // init buffers
@@ -69,12 +75,14 @@ public:
         sampleRateChanged(getSampleRate());
     }
 
-    ~OneKnobConvolutionReverbPlugin() override
+    ~ConvolutionLoaderPlugin() override
     {
         delete[] highpassBufL;
-        delete[] highpassBufR;
         delete[] inplaceProcBufL;
+       #ifdef CONVOLUTION_REVERB
+        delete[] highpassBufR;
         delete[] inplaceProcBufR;
+       #endif
     }
 
 protected:
@@ -113,7 +121,11 @@ protected:
 
     int64_t getUniqueId() const noexcept override
     {
-        return d_cconst('O', 'K', 'c', 'r');
+       #ifdef CONVOLUTION_REVERB
+        return d_cconst('M', 'A', 'c', 'r');
+       #else
+        return d_cconst('M', 'A', 'c', 'a');
+       #endif
     }
 
     // -------------------------------------------------------------------
@@ -123,6 +135,7 @@ protected:
     {
         switch (index)
         {
+       #ifdef CONVOLUTION_REVERB
         case kParameterDryLevel:
             parameter.hints = kParameterIsAutomatable;
             parameter.name = "Dry Level";
@@ -139,6 +152,7 @@ protected:
                 parameter.enumValues.values = enumValues;
             }
             break;
+       #endif
         case kParameterWetLevel:
             parameter.hints = kParameterIsAutomatable;
             parameter.name = "Wet Level";
@@ -155,6 +169,7 @@ protected:
                 parameter.enumValues.values = enumValues;
             }
             break;
+       #ifdef CONVOLUTION_REVERB
         case kParameterHighPassFilter:
             parameter.hints = kParameterIsAutomatable;
             parameter.name = "High Pass Filter";
@@ -179,6 +194,7 @@ protected:
             parameter.ranges.min = kParameterRanges[kParameterTrails].min;
             parameter.ranges.max = kParameterRanges[kParameterTrails].max;
             break;
+       #endif
         case kParameterBypass:
             parameter.initDesignation(kParameterDesignationBypass);
             break;
@@ -202,7 +218,7 @@ protected:
             state.key = "irfile";
             state.label = "IR File";
            #ifdef __MOD_DEVICES__
-            state.fileTypes = "ir";
+            state.fileTypes = "cabsim,ir";
            #endif
             break;
         }
@@ -222,14 +238,17 @@ protected:
 
         switch (index)
         {
+       #ifdef CONVOLUTION_REVERB
         case kParameterDryLevel:
             if (!bypassed)
                 smoothDryLevel.setTargetValue(std::pow(10.f, 0.05f * value));
             break;
+       #endif
         case kParameterWetLevel:
             if (!bypassed)
                 smoothWetLevel.setTargetValue(std::pow(10.f, 0.05f * value));
             break;
+       #ifdef CONVOLUTION_REVERB
         case kParameterHighPassFilter:
             korgFilterL.setFrequency(value);
             korgFilterR.setFrequency(value);
@@ -239,6 +258,7 @@ protected:
             if (bypassed)
                 smoothWetLevel.setTargetValue(trails ? std::pow(10.f, 0.05f * parameters[kParameterWetLevel]) : 0.f);
             break;
+       #endif
         case kParameterBypass:
             bypassed = value > 0.5f;
             if (bypassed)
@@ -248,9 +268,13 @@ protected:
             }
             else
             {
+               #ifdef CONVOLUTION_REVERB
                 korgFilterL.reset();
                 korgFilterR.reset();
                 smoothDryLevel.setTargetValue(std::pow(10.f, 0.05f * parameters[kParameterDryLevel]));
+               #else
+                smoothDryLevel.setTargetValue(0.f);
+               #endif
                 smoothWetLevel.setTargetValue(std::pow(10.f, 0.05f * parameters[kParameterWetLevel]));
             }
             break;
@@ -269,14 +293,23 @@ protected:
             drwav_uint64 numFrames;
             const size_t valuelen = std::strlen(value);
 
-            ScopedPointer<TwoStageThreadedConvolver> newConvolverL, newConvolverR;
+           #ifdef CONVOLUTION_REVERB
+            ScopedPointer<TwoStageThreadedConvolver> newConvolverL;
+            ScopedPointer<TwoStageThreadedConvolver> newConvolverR;
+           #else
+            ScopedPointer<TwoStageThreadedConvolver> newConvolver;
+           #endif
 
             if (valuelen <= 5)
             {
                 bufferedConvolver.stop();
                 const MutexLocker cml(mutex);
+               #ifdef CONVOLUTION_REVERB
                 convolverL.swapWith(newConvolverL);
                 convolverR.swapWith(newConvolverR);
+               #else
+                convolver.swapWith(newConvolver);
+               #endif
                 return;
             }
 
@@ -290,6 +323,7 @@ protected:
             loadedFilename = value;
 
             float* irBufL;
+           #ifdef CONVOLUTION_REVERB
             float* irBufR;
             switch (channels)
             {
@@ -324,6 +358,21 @@ protected:
                 }
                 break;
             }
+           #else
+            if (channels == 1)
+            {
+                irBufL = ir;
+            }
+            else
+            {
+                irBufL = new float[numFrames];
+                for (drwav_uint64 i = 0, j = 0; i < numFrames; ++i)
+                {
+                    irBufL[i] = ir[j];
+                    j += channels;
+                }
+            }
+           #endif
 
             if (sampleRate != getSampleRate())
             {
@@ -337,6 +386,7 @@ protected:
                 delete[] irBufL;
                 irBufL = irBufResampledL;
 
+               #ifdef CONVOLUTION_REVERB
                 // right channel, optional
                 if (irBufL != irBufR)
                 {
@@ -345,10 +395,12 @@ protected:
                     delete[] irBufR;
                     irBufR = irBufResampledR;
                 }
+               #endif
 
                 numFrames = numResampledFrames;
             }
 
+           #ifdef CONVOLUTION_REVERB
             newConvolverL = new TwoStageThreadedConvolver();
             newConvolverL->init(headBlockSize, tailBlockSize, irBufL, numFrames);
 
@@ -357,17 +409,30 @@ protected:
 
             bufferedConvolver.stop();
             bufferedConvolver.start(newConvolverL, newConvolverR);
+           #else
+            newConvolver = new TwoStageThreadedConvolver();
+            newConvolver->init(headBlockSize, tailBlockSize, irBufL, numFrames);
+
+            bufferedConvolver.stop();
+            bufferedConvolver.start(newConvolver);
+           #endif
 
             {
                 const MutexLocker cml(mutex);
+               #ifdef CONVOLUTION_REVERB
                 convolverL.swapWith(newConvolverL);
                 convolverR.swapWith(newConvolverR);
+               #else
+                convolver.swapWith(newConvolver);
+               #endif
             }
 
             if (irBufL != ir)
                 delete[] irBufL;
+           #ifdef CONVOLUTION_REVERB
             if (irBufR != irBufL)
                 delete[] irBufR;
+           #endif
 
             drwav_free(ir, nullptr);
             return;
@@ -379,8 +444,10 @@ protected:
 
     void activate() override
     {
+       #ifdef CONVOLUTION_REVERB
         korgFilterL.reset();
         korgFilterR.reset();
+       #endif
 
         smoothDryLevel.clearToTargetValue();
         smoothWetLevel.clearToTargetValue();
@@ -391,35 +458,38 @@ protected:
         if (frames == 0)
             return;
 
-        const float* const inL = inputs[0];
-        const float* const inR = inputs[1];
+        const float* const inL  = inputs[0];
         /* */ float* const outL = outputs[0];
+       #ifdef CONVOLUTION_REVERB
+        const float* const inR  = inputs[1];
         /* */ float* const outR = outputs[1];
+       #endif
 
         // optimize for non-denormal usage
         for (uint32_t i = 0; i < frames; ++i)
         {
             if (!std::isfinite(inL[i]))
                 __builtin_unreachable();
-            if (!std::isfinite(inR[i]))
-                __builtin_unreachable();
             if (!std::isfinite(outL[i]))
+                __builtin_unreachable();
+           #ifdef CONVOLUTION_REVERB
+            if (!std::isfinite(inR[i]))
                 __builtin_unreachable();
             if (!std::isfinite(outR[i]))
                 __builtin_unreachable();
+           #endif
         }
 
         const float* dryBufL = inL;
+       #ifdef CONVOLUTION_REVERB
         const float* dryBufR = inR;
-
-        const int hpf = static_cast<int>(parameters[kParameterHighPassFilter] + 0.5f);
 
         if (bypassed)
         {
             std::memset(highpassBufL, 0, sizeof(float) * frames);
             std::memset(highpassBufR, 0, sizeof(float) * frames);
         }
-        else if (hpf == 0)
+        else if (static_cast<int>(parameters[kParameterHighPassFilter] + 0.5f) == 0)
         {
             std::memcpy(highpassBufL, inL, sizeof(float) * frames);
             std::memcpy(highpassBufR, inR, sizeof(float) * frames);
@@ -429,6 +499,16 @@ protected:
             korgFilterL.processHighPass(inL, highpassBufL, frames);
             korgFilterR.processHighPass(inR, highpassBufR, frames);
         }
+       #else
+        if (bypassed)
+        {
+            std::memset(highpassBufL, 0, sizeof(float) * frames);
+        }
+        else
+        {
+            std::memcpy(highpassBufL, inL, sizeof(float) * frames);
+        }
+       #endif
 
         if (outL == inL)
         {
@@ -436,11 +516,13 @@ protected:
             std::memcpy(inplaceProcBufL, inL, sizeof(float) * frames);
         }
 
+       #ifdef CONVOLUTION_REVERB
         if (outR == inR)
         {
             dryBufR = inplaceProcBufR;
             std::memcpy(inplaceProcBufR, inR, sizeof(float) * frames);
         }
+       #endif
 
         float wetLevel, dryLevel;
 
@@ -448,20 +530,31 @@ protected:
 
         if (cmtl.wasLocked())
         {
+           #ifdef CONVOLUTION_REVERB
             TwoStageThreadedConvolver* const convL = convolverL.get();
             TwoStageThreadedConvolver* const convR = convolverR.get();
 
             if (convL != nullptr && convR != nullptr)
+           #else
+            if (TwoStageThreadedConvolver* const conv = convolver.get())
+           #endif
             {
                 if (buffered)
                 {
+                   #ifdef CONVOLUTION_REVERB
                     const float* const ins[2] = { highpassBufL, highpassBufR };
                     bufferedConvolver.process(ins, outputs, frames);
+                   #else
+                   #endif
                 }
                 else
                 {
+                   #ifdef CONVOLUTION_REVERB
                     convL->process(highpassBufL, outL, frames);
                     convR->process(highpassBufR, outR, frames);
+                   #else
+                    conv->process(highpassBufL, outL, frames);
+                   #endif
                 }
 
                 for (uint32_t i = 0; i < frames; ++i)
@@ -471,18 +564,26 @@ protected:
 
                     if (wetLevel <= 0.001f)
                     {
+                       #ifdef CONVOLUTION_REVERB
                         outL[i] = outR[i] = 0.f;
+                       #else
+                        outL[i] = 0.f;
+                       #endif
                     }
                     else
                     {
                         outL[i] *= wetLevel;
+                       #ifdef CONVOLUTION_REVERB
                         outR[i] *= wetLevel;
+                       #endif
                     }
 
                     if (dryLevel > 0.001f)
                     {
                         outL[i] += dryBufL[i] * dryLevel;
+                       #ifdef CONVOLUTION_REVERB
                         outR[i] += dryBufR[i] * dryLevel;
+                       #endif
                     }
                 }
 
@@ -496,7 +597,9 @@ protected:
             dryLevel = smoothDryLevel.next();
 
             outL[i] = dryBufL[i] * dryLevel;
+           #ifdef CONVOLUTION_REVERB
             outR[i] = dryBufR[i] * dryLevel;
+           #endif
         }
     }
 
@@ -505,22 +608,28 @@ protected:
         bufferSize = newBufferSize;
 
         delete[] highpassBufL;
-        delete[] highpassBufR;
         delete[] inplaceProcBufL;
-        delete[] inplaceProcBufR;
 
         highpassBufL = new float[newBufferSize];
-        highpassBufR = new float[newBufferSize];
         inplaceProcBufL = new float[newBufferSize];
+
+       #ifdef CONVOLUTION_REVERB
+        delete[] highpassBufR;
+        delete[] inplaceProcBufR;
+
+        highpassBufR = new float[newBufferSize];
         inplaceProcBufR = new float[newBufferSize];
+       #endif
 
         bufferedConvolver.setBufferSize(newBufferSize);
     }
 
     void sampleRateChanged(const double newSampleRate) override
     {
+       #ifdef CONVOLUTION_REVERB
         korgFilterL.setSampleRate(newSampleRate);
         korgFilterR.setSampleRate(newSampleRate);
+       #endif
 
         smoothDryLevel.setSampleRate(newSampleRate);
         smoothWetLevel.setSampleRate(newSampleRate);
@@ -536,15 +645,26 @@ protected:
     // -------------------------------------------------------------------
 
 private:
-    ScopedPointer<TwoStageThreadedConvolver> convolverL, convolverR;
+   #ifdef CONVOLUTION_REVERB
+    ScopedPointer<TwoStageThreadedConvolver> convolverL;
+    ScopedPointer<TwoStageThreadedConvolver> convolverR;
     StereoBufferedConvolver bufferedConvolver;
     Korg35Filter korgFilterL, korgFilterR;
+   #else
+    ScopedPointer<TwoStageThreadedConvolver> convolver;
+    MonoBufferedConvolver bufferedConvolver;
+   #endif
+
     Mutex mutex;
     String loadedFilename;
 
     bool bypassed = false;
     bool buffered = false;
+   #ifdef CONVOLUTION_REVERB
     bool trails = true;
+   #else
+    static constexpr const bool trails = false;
+   #endif
     uint32_t bufferSize = 0;
 
     float parameters[kParameterCount];
@@ -555,20 +675,24 @@ private:
 
     // buffers for placing highpass signal before convolution
     float* highpassBufL = nullptr;
+   #ifdef CONVOLUTION_REVERB
     float* highpassBufR = nullptr;
+   #endif
 
     // if doing inline processing, copy buffers here before convolution
     float* inplaceProcBufL = nullptr;
+   #ifdef CONVOLUTION_REVERB
     float* inplaceProcBufR = nullptr;
+   #endif
 
-    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OneKnobConvolutionReverbPlugin)
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ConvolutionLoaderPlugin)
 };
 
 // -----------------------------------------------------------------------
 
 Plugin* createPlugin()
 {
-    return new OneKnobConvolutionReverbPlugin();
+    return new ConvolutionLoaderPlugin();
 }
 
 END_NAMESPACE_DISTRHO
