@@ -20,34 +20,36 @@
 
 #define DISTRHO_PLUGIN_HAS_UI          0
 #define DISTRHO_PLUGIN_IS_RT_SAFE      0
-#define DISTRHO_PLUGIN_NUM_INPUTS      1
-#define DISTRHO_PLUGIN_NUM_OUTPUTS     1
 #define DISTRHO_PLUGIN_WANT_PROGRAMS   0
 #define DISTRHO_PLUGIN_WANT_STATE      1
 #define DISTRHO_PLUGIN_WANT_FULL_STATE 0
 
-#if DISTRHO_PLUGIN_NUM_INPUTS == 2
-#define CONVOLUTION_REVERB
+#ifdef CONVOLUTION_REVERB
+#define DISTRHO_PLUGIN_NUM_INPUTS   2
+#define DISTRHO_PLUGIN_NUM_OUTPUTS  2
 #define DISTRHO_PLUGIN_NAME         "MOD Convolution Loader"
 #define DISTRHO_PLUGIN_URI          "https://mod.audio/plugins/ConvolutionLoader"
 #define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:ReverbPlugin"
 #else
-#define DISTRHO_PLUGIN_NAME         "MOD CabSim Loader"
-#define DISTRHO_PLUGIN_URI          "https://mod.audio/plugins/ConvolutionLoader#cabsim"
+#define DISTRHO_PLUGIN_NUM_INPUTS   1
+#define DISTRHO_PLUGIN_NUM_OUTPUTS  1
+#define DISTRHO_PLUGIN_NAME         "MOD Cabinet Loader"
+#define DISTRHO_PLUGIN_URI          "https://mod.audio/plugins/CabinetLoader"
 #define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:SimulatorPlugin"
 #endif
 
 enum Parameters {
    #ifdef CONVOLUTION_REVERB
     kParameterDryLevel,
-   #endif
     kParameterWetLevel,
-   #ifdef CONVOLUTION_REVERB
     kParameterHighPassFilter,
     kParameterTrails,
-   #endif
     kParameterBypass,
     kParameterBuffered,
+   #else
+    kParameterWetLevel,
+    kParameterBypass,
+   #endif
     kParameterCount
 };
 
@@ -65,12 +67,12 @@ static constexpr const struct OneKnobParameterRanges {
 } kParameterRanges[kParameterCount] = {
    #ifdef CONVOLUTION_REVERB
     { -60.f, 0.f, 0.f },
-   #endif
     { -60.f, -30.f, 0.f },
-   #ifdef CONVOLUTION_REVERB
     { 0.f, 0.f, 500.f },
     { 0.f, 1.f, 1.f },
-   #endif
     { 0.f, 0.f, 1.f },
+   #else
+    { -60.f, -12.f, 0.f },
+   #endif
     { 0.f, 0.f, 1.f }
 };

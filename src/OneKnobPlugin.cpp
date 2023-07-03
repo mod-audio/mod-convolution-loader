@@ -33,10 +33,10 @@
 
 START_NAMESPACE_DISTRHO
 
-#if defined(_MOD_DEVICE_DUO)
+#if defined(_MOD_DEVICE_DUO) && defined(CONVOLUTION_REVERB)
 static constexpr const size_t headBlockSize = 256;
 static constexpr const size_t tailBlockSize = 4096;
-#elif defined(_MOD_DEVICE_DWARF)
+#elif defined(_MOD_DEVICE_DWARF) && defined(CONVOLUTION_REVERB)
 static constexpr const size_t headBlockSize = 128;
 static constexpr const size_t tailBlockSize = 2048;
 #else
@@ -111,7 +111,11 @@ protected:
 
     const char* getDescription() const override
     {
+       #ifdef CONVOLUTION_REVERB
         return "The MOD Convolution Loader enables you to easily create custom reverb and other effects using impulse responses (IRs)";
+       #else
+        return "The MOD Cabinet Loader enables you to easily create custom cabinet simulations and other effects using impulse responses (IRs)";
+       #endif
     }
 
     const char* getLicense() const noexcept override
@@ -155,8 +159,13 @@ protected:
        #endif
         case kParameterWetLevel:
             parameter.hints = kParameterIsAutomatable;
+           #ifdef CONVOLUTION_REVERB
             parameter.name = "Wet Level";
             parameter.symbol = "wetlevel";
+           #else
+            parameter.name = "Level";
+            parameter.symbol = "level";
+           #endif
             parameter.unit = "dB";
             parameter.ranges.def = kParameterRanges[kParameterWetLevel].def;
             parameter.ranges.min = kParameterRanges[kParameterWetLevel].min;
@@ -198,6 +207,7 @@ protected:
         case kParameterBypass:
             parameter.initDesignation(kParameterDesignationBypass);
             break;
+       #ifdef CONVOLUTION_REVERB
         case kParameterBuffered:
             parameter.hints = kParameterIsAutomatable | kParameterIsInteger | kParameterIsBoolean;
             parameter.name = "Buffered";
@@ -206,6 +216,7 @@ protected:
             parameter.ranges.min = kParameterRanges[kParameterBuffered].min;
             parameter.ranges.max = kParameterRanges[kParameterBuffered].max;
             break;
+       #endif
         }
     }
 
@@ -217,9 +228,13 @@ protected:
             state.hints = kStateIsFilenamePath;
             state.key = "irfile";
             state.label = "IR File";
-           #ifdef __MOD_DEVICES__
-            state.fileTypes = "cabsim,ir";
+          #ifdef __MOD_DEVICES__
+           #ifdef CONVOLUTION_REVERB
+            state.fileTypes = "ir";
+           #else
+            state.fileTypes = "cabsim";
            #endif
+          #endif
             break;
         }
     }
@@ -278,9 +293,11 @@ protected:
                 smoothWetLevel.setTargetValue(std::pow(10.f, 0.05f * parameters[kParameterWetLevel]));
             }
             break;
+       #ifdef CONVOLUTION_REVERB
         case kParameterBuffered:
             buffered = value > 0.5f;
             break;
+       #endif
         }
     }
 
