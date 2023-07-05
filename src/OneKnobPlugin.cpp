@@ -400,7 +400,8 @@ protected:
                 // left channel, always present
                 float* const irBufResampledL = new float[numResampledFrames];
                 resampler.oneshot(irBufL, numFrames, irBufResampledL, numResampledFrames);
-                delete[] irBufL;
+                if (irBufL != ir)
+                    delete[] irBufL;
                 irBufL = irBufResampledL;
 
                #ifdef CONVOLUTION_REVERB
@@ -409,7 +410,8 @@ protected:
                 {
                     float* const irBufResampledR = new float[numResampledFrames];
                     resampler.oneshot(irBufR, numFrames, irBufResampledR, numResampledFrames);
-                    delete[] irBufR;
+                    if (irBufR != ir)
+                        delete[] irBufR;
                     irBufR = irBufResampledR;
                 }
                #endif
