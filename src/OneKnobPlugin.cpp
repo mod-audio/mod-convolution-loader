@@ -319,12 +319,13 @@ protected:
 
             if (valuelen <= 5)
             {
+               #ifdef CONVOLUTION_REVERB
                 bufferedConvolver.stop();
                 const MutexLocker cml(mutex);
-               #ifdef CONVOLUTION_REVERB
                 convolverL.swapWith(newConvolverL);
                 convolverR.swapWith(newConvolverR);
                #else
+                const MutexLocker cml(mutex);
                 convolver.swapWith(newConvolver);
                #endif
                 return;
@@ -431,9 +432,6 @@ protected:
            #else
             newConvolver = new TwoStageThreadedConvolver();
             newConvolver->init(headBlockSize, tailBlockSize, irBufL, numFrames);
-
-            bufferedConvolver.stop();
-            bufferedConvolver.start(newConvolver);
            #endif
 
             {
@@ -558,15 +556,14 @@ protected:
             if (TwoStageThreadedConvolver* const conv = convolver.get())
            #endif
             {
+               #ifdef CONVOLUTION_REVERB
                 if (buffered)
                 {
-                   #ifdef CONVOLUTION_REVERB
                     const float* const ins[2] = { highpassBufL, highpassBufR };
                     bufferedConvolver.process(ins, outputs, frames);
-                   #else
-                   #endif
                 }
                 else
+               #endif
                 {
                    #ifdef CONVOLUTION_REVERB
                     convL->process(highpassBufL, outL, frames);
@@ -638,9 +635,9 @@ protected:
 
         highpassBufR = new float[newBufferSize];
         inplaceProcBufR = new float[newBufferSize];
-       #endif
 
         bufferedConvolver.setBufferSize(newBufferSize);
+       #endif
     }
 
     void sampleRateChanged(const double newSampleRate) override
@@ -671,15 +668,14 @@ private:
     Korg35Filter korgFilterL, korgFilterR;
    #else
     ScopedPointer<TwoStageThreadedConvolver> convolver;
-    MonoBufferedConvolver bufferedConvolver;
    #endif
 
     Mutex mutex;
     String loadedFilename;
 
     bool bypassed = false;
-    bool buffered = false;
    #ifdef CONVOLUTION_REVERB
+    bool buffered = false;
     bool trails = true;
    #else
     static constexpr const bool trails = false;
