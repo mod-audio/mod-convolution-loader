@@ -47,7 +47,8 @@ public:
 
     bool init(const size_t headBlockSize, const size_t tailBlockSize, const fftconvolver::Sample* const ir, const size_t irLen)
     {
-        if (irLen > headBlockSize * 2)
+        // only use 2-stage processing if the engine does something with it (check based on `TwoStageFFTConvolver::init`)
+        if (irLen > 2 * fftconvolver::NextPowerOf2(tailBlockSize))
         {
             if (! fftconvolver::TwoStageFFTConvolver::init(headBlockSize, tailBlockSize, ir, irLen))
                 return false;
