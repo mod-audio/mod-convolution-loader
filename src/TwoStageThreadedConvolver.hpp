@@ -47,18 +47,21 @@ public:
 
     bool init(const size_t headBlockSize, const size_t tailBlockSize, const fftconvolver::Sample* const ir, const size_t irLen)
     {
-        // only use 2-stage processing if the engine does something with it (check based on `TwoStageFFTConvolver::init`)
-        if (irLen > 2 * fftconvolver::NextPowerOf2(tailBlockSize))
+        if (fftconvolver::TwoStageFFTConvolver::init(headBlockSize, tailBlockSize, ir, irLen))
         {
-            if (! fftconvolver::TwoStageFFTConvolver::init(headBlockSize, tailBlockSize, ir, irLen))
-                return false;
-
             startThread(true);
             return true;
         }
 
-        nonThreadedConvolver = new fftconvolver::FFTConvolver();
-        return nonThreadedConvolver->init(headBlockSize, ir, irLen);
+        ScopedPointer<fftconvolver::FFTConvolver> conv(new fftconvolver::FFTConvolver);
+
+        if (conv->init(headBlockSize, ir, irLen))
+        {
+            nonThreadedConvolver = conv.release();
+            return true;
+        }
+
+        return false;
     }
 
     void process(const fftconvolver::Sample* const input, fftconvolver::Sample* const output, const size_t len)
