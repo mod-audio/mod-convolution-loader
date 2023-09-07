@@ -62,7 +62,7 @@ enum States {
     kStateCount
 };
 
-static constexpr const struct OneKnobParameterRanges {
+static constexpr const struct {
     float min, def, max;
 } kParameterRanges[kParameterCount] = {
    #ifdef CONVOLUTION_REVERB
