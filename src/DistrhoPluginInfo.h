@@ -27,13 +27,15 @@
 #ifdef CONVOLUTION_REVERB
 #define DISTRHO_PLUGIN_NUM_INPUTS   2
 #define DISTRHO_PLUGIN_NUM_OUTPUTS  2
-#define DISTRHO_PLUGIN_NAME         "MOD Convolution Loader"
+#define DISTRHO_PLUGIN_NAME         "Convolution Loader"
+#define DISTRHO_PLUGIN_LABEL        "ConvolutionLoader"
 #define DISTRHO_PLUGIN_URI          "https://mod.audio/plugins/ConvolutionLoader"
 #define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:ReverbPlugin"
 #else
 #define DISTRHO_PLUGIN_NUM_INPUTS   1
 #define DISTRHO_PLUGIN_NUM_OUTPUTS  1
-#define DISTRHO_PLUGIN_NAME         "MOD Cabinet Loader"
+#define DISTRHO_PLUGIN_NAME         "Cabinet Loader"
+#define DISTRHO_PLUGIN_LABEL        "CabinetLoader"
 #define DISTRHO_PLUGIN_URI          "https://mod.audio/plugins/CabinetLoader"
 #define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:SimulatorPlugin"
 #endif

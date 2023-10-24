@@ -91,7 +91,7 @@ protected:
 
     const char* getLabel() const noexcept override
     {
-        return DISTRHO_PLUGIN_NAME;
+        return DISTRHO_PLUGIN_LABEL;
     }
 
     const char* getMaker() const noexcept override
@@ -101,7 +101,7 @@ protected:
 
     const char* getHomePage() const override
     {
-        return DISTRHO_PLUGIN_URI;
+        return "https://mod.audio/";
     }
 
     uint32_t getVersion() const noexcept override
@@ -112,9 +112,36 @@ protected:
     const char* getDescription() const override
     {
        #ifdef CONVOLUTION_REVERB
-        return "The MOD Convolution Loader enables you to easily create custom reverb and other effects using impulse responses (IRs)";
+        return R"(
+The MOD Convolution Loader enables you to easily create custom reverb and other effects using impulse responses (IRs).
+
+Using a very resource effective processing, it allows IRs with a length of up to 15s on the MOD Dwarf and MOD Duo X, less on the MOD Duo.
+
+IRs can be uploaded using the file manager in either WAV and FLAC format.
+Multi-channel files are supported but always processed in stereo mode.
+For faster loading it is recommended to use WAV format files with 48kHz and 24 bit.
+
+The plugin is very easy to use: Simply select the IR file, set the levels as desired, optionally filter out some low end with the built-in high pass filter, and off you go.
+
+There is a Trails switch in the advanced settings;
+when enabled the reverb tail peacefully decays when you bypass the plugin, disable it and the tail will immediately disappear when bypassed.
+
+Features:
+Plugin by MOD Audio & DISTRHO, based on HiFi-LoFi FFTConvolver engine.
+)";
        #else
-        return "The MOD Cabinet Loader enables you to easily create custom cabinet simulations and other effects using impulse responses (IRs)";
+        return R"(
+The MOD Cabinet Loader enables you to play through your favorite cabinet impulse responses (IRs).
+
+The plugin is very easy to use: Simply select the IR file, set the level as desired and off you go.
+
+IRs can be uploaded using the file manager in either WAV and FLAC format.
+Multi-channel files are supported but always processed in mono mode using the first channel.
+For faster loading it is recommended to use WAV format files with 48kHz and 24 bit.
+
+Features:
+Plugin by MOD Audio & DISTRHO, based on HiFi-LoFi FFTConvolver engine.
+)";
        #endif
     }
 
@@ -163,7 +190,7 @@ protected:
             parameter.name = "Wet Level";
             parameter.symbol = "wetlevel";
            #else
-            parameter.name = "Level";
+            parameter.name = "Output";
             parameter.symbol = "level";
            #endif
             parameter.unit = "dB";
@@ -220,7 +247,7 @@ protected:
         }
     }
 
-    void initState(uint32_t index, State &state) override
+    void initState(uint32_t index, State& state) override
     {
         switch (index)
         {
